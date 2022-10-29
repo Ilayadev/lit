@@ -2,7 +2,8 @@
 <html lang="en-GB">
 <head>
   <meta charset="utf-8">  
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">   
+  <script type="module" src="../dist/src/index.js"></script>  
   <style>
     *{
       box-sizing: border-box;
@@ -17,20 +18,20 @@
       width: 100vw;
       height: 100vh;
     }
-    table-component{
-      
+    table-component{      
       width: 100%;
-      height:500px
+      /* height:500px */
     }
   </style>
 </head>
 <body>
+  
   <div id="demo">
-    <table-component rowHeight=25></table-component>
-  </div>
-  <script type="module" src="../dist/src/TableComponent.js">
-    
-  </script>
- 
+    <table-component  rowheight=25>
+      <div slot="name"></div>
+      <div slot="gender"></div>      
+    </table-component>
+  </div>   
+  <script type="module" src="../dist/src/TableComponent.js"></script>  
 </body>
 </html>

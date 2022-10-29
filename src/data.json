@@ -1,32 +1,32 @@
-export { TableComponent } from './TableComponent.js';
-export let tableData={
-    columns:[
+
+{
+    "columns":[
         {
-            name:"Name",
-            type:"string",
-            editable:false,
-            visible:true
+            "name":"Name",
+            "type":"string",
+            "editable":false,
+            "visible":true
         },
         {
-            name:"Gender",
-            type:"string",
-            editable:false,
-            visible:true
+            "name":"Gender",
+            "type":"string",
+            "editable":false,
+            "visible":true
         },
         {
-            name:"Id",
-            type:"number",
-            editable:false,
-            visible:true
+            "name":"Id",
+            "type":"number",
+            "editable":false,
+            "visible":true
         },
         {
-            name:"Marks",
-            type:"number",
-            editable:false,
-            visible:true
+            "name":"Marks",
+            "type":"number",
+            "editable":false,
+            "visible":true
         }
     ],
-    rows:[
+    "rows":[
         {
             "Id": 5005,
             "Name": "ilaya",
@@ -2458,4 +2458,3 @@ export let tableData={
         }
     ]
 }
-document.querySelector('table-component')?.setAttribute("data",JSON.stringify(tableData))
