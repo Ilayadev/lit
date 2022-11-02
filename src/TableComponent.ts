@@ -1,14 +1,18 @@
 import { html, css, LitElement, PropertyValueMap, PropertyDeclarations, nothing } from 'lit';
-import { tableData } from '.';
 import { property, query, state } from 'lit/decorators.js';
 import { map } from 'lit/directives/map.js';
 import { styleMap } from 'lit/directives/style-map.js';
 import { classMap } from 'lit/directives/class-map.js';
+import {guard} from 'lit/directives/guard.js';
+import {ref} from 'lit/directives/ref.js';
 
 export class TableComponent extends LitElement {
   constructor() {
-    super()
+    super()     
+    this.attachShadow({mode:'open',slotAssignment:'manual'})
   }
+  
+  firstTime:boolean=true
   connectedCallback(): void {
     super.connectedCallback()
   }
@@ -17,9 +21,10 @@ export class TableComponent extends LitElement {
 
   @state()
   extraElement!: number
+  // inputElement:{[key in  string]:Element}={}
   startingPoint!: number
   rowPerBlock!: number
-  firstcall: boolean = true
+  triggerGenrateElements: boolean = false
   @property({ type: Number })
   rowHeight!: number
   @state()
@@ -30,25 +35,29 @@ export class TableComponent extends LitElement {
   @state()
   selectedColumn: number = 1
   @state()
-  overlapDetails: Partial<{ left: string, top: string, width: string, height: string }>={left:"0px",top:"0px",width:"0px",height:"0px"}
+  overlapDetails: Partial<{ left: string, top: string, width: string, height: string }> = { left: "0px", top: "0px", width: "0px", height: "0px" }
   @state()
   editorMode: boolean = false
   editorRect!: Partial<{ left: string, top: string, width: string, height: string }>
   @state()
   selectedRowColumn: boolean = false
+  @state()
+  error: boolean = false
+  errorMessage!: string
   @query('div[selected]')
   selectedElement!: HTMLElement
-  @query('.table-container')
+  @query('.container')
   tableElement!: HTMLElement
   @query('div[contenteditable]')
-  editor!: HTMLElement
+  editor!: HTMLElement  
 
   protected firstUpdated(_changedProperties: PropertyValueMap<any> | Map<PropertyKey, unknown>): void {
-    this.tableElement.focus()
-    this.initializing()        
-
+    if(!this.error){
+      this.tableElement.focus()     
+      this.initializing()
+    }   
   }
-  get tableHeight() {
+  get tableHeight() {    
     return this.tableElement?.getBoundingClientRect().height
   }
   get parentDeatils() {
@@ -65,22 +74,35 @@ export class TableComponent extends LitElement {
       font-family:Roboto, "Helvetica Neue", sans-serif;
       font-size:12px
      }
-    .table-container{
+     .container{
       width:100%;
       height:100%;      
-      box-sizing:border-box;
+      box-sizing:border-box;      
+      overflow-y:auto;
+      outline:none;      
+     }
+    
+    .table{
       display:grid;
       grid-template-columns:auto 1fr;
       grid-template-rows:100%;
-      overflow-y:auto;
-      outline:none;
-    }    
+    }   
+    .report{
+      width:100%;
+      height:100%;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      background-color:#ededed;
+      color: #444040;
+      font-weight: bold;
+      font-size: 14px;
+    } 
     .serial-panel{
       border-left:1px solid #dedede;
       position:sticky;
       left:0;
-      z-index:20;
-      background-color:#fff
+      z-index:20;      
     }
     .content-panel{
       z-index:10;
@@ -90,13 +112,20 @@ export class TableComponent extends LitElement {
      grid-template-columns:auto;
      grid-template-rows:30px 1fr;    
      height:max-content; 
+     background-color:#fff
     }
     .content-header,.serial-header{
       display:grid;     
       position:sticky;
       top:0;
       left:0 ;
-      z-index:30
+      z-index:30;
+    }
+    .serial-cell{
+      padding:0px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
     }
     .common{
       padding:7px 4px 4px 7px ;         
@@ -111,8 +140,7 @@ export class TableComponent extends LitElement {
       font-weight:bold;
     }    
     .translating-element{
-      display:grid;
-      grid-auto-rows:30px;
+      display:grid;      
       outline:none;
     }   
     .cells{
@@ -133,7 +161,7 @@ export class TableComponent extends LitElement {
       pointer-events:none
     }
     .editor{
-      position: absolute;
+      position: fixed;
       border: 1px solid #13ad6b;
       background-color: #fff;
       z-index: 20;
@@ -142,14 +170,14 @@ export class TableComponent extends LitElement {
       box-sizing:border-box;
     }
     .editor::after{
-      content: attr(selected);
-    left: -1px;
-    position: absolute;
-    bottom: 100%;
-    background-color: #17a366;
-    color: white;
-    padding: 2px 5px;
-}
+    content: attr(selected);
+      left: -1px;
+      position: absolute;
+      bottom: 100%;
+      background-color: #17a366;
+      color: white;
+      padding: 2px 5px;
+    }  
     
   `;
   generateColumns(columnArray: any[]) {
@@ -160,17 +188,46 @@ export class TableComponent extends LitElement {
   generateSerials(serials: any[]) {
     return html`${map(serials, (item, index) => {
       index = index + this.startingPoint + 1
-      let condition:boolean = this.selectedRow == index && this.selectedColumn == 0
-      return html`<div class="common ${classMap({ hightlightRowColumn: condition })}" ?selected=${condition} @click="${(event: any) => { this.hightlightRow(index, event.target) }}">${index}</div>`
+      let condition: boolean = this.selectedRow == index && this.selectedColumn == 0
+      return html`<div class=" common  ${classMap({ hightlightRowColumn: condition })}" ?selected=${condition} @click="${(event: any) => { this.hightlightRow(index, event.target) }}">${index}</div>`
     })}`
   }
-  generateRowCells(rows: any[]) {
-    return html`${map(rows, (rowItem, index) => {
+  generateRowCells(rows: any[]) {    
+    let ele:any= html`${map(rows, (rowItem, index) => {
       return html`${map(this.data.columns, (columnItem, columnIndex) => {
-        let selectingCondition: boolean = this.selectedRow === index + this.startingPoint + 1 && this.selectedColumn === columnIndex + 1
-        return html`<div class="common cells ${classMap({ highlightCell: selectingCondition })}" ?selected=${selectingCondition} @click="${() => { this.highlightCell(index + this.startingPoint + 1, columnIndex + 1) }}" >${rowItem[columnItem.name]}</div>`
+        let selectingCondition: boolean = this.selectedRow === index + this.startingPoint + 1 && this.selectedColumn === columnIndex + 1              
+         let element=this.generateElement(columnItem,rowItem[columnItem.name])   
+        return html`<div class="common cells ${classMap({ highlightCell: selectingCondition })}" ?selected=${selectingCondition} @click="${() => { this.highlightCell(index + this.startingPoint + 1, columnIndex + 1) }}">${element}</div>`
       })}`
-    })}`
+    })}`     
+    return html`${ele}`
+  }
+  // assignSlot(slotName:string){
+  //     let inputElement=this.inputElement[slotName].cloneNode(true) as HTMLSlotElement       
+  //     let slot=document.createElement("slot")
+  //     slot.assign(inputElement)      
+  //     this.appendChild(inputElement)
+  //     return html `${slot}`
+  // }
+  generateElement(column:any,value:any){    
+      let element=this.createlement(column.tag)
+      if(column.cellElement?.class){
+        this.assignClass(element,column.element.class)
+      }
+      let inputproperty=column.cellElement.inputproperty
+      //@ts-ignore
+      element[inputproperty]=value||""
+      return element
+  }
+  createlement(tag:string){
+      return document.createElement(tag)
+  }
+  assignClass(element:HTMLElement,classes:{[key in string]:boolean}){
+      for(let key in classes){
+        if(classes[key]){
+          element.classList.add(key)
+        }
+      }
   }
   initializing() {
     this.rowPerBlock = Math.ceil(this.tableHeight / this.rowHeight)
@@ -182,8 +239,8 @@ export class TableComponent extends LitElement {
     this.startingPoint = Math.max(0, this.startingPoint)
     let visibleCount = this.rowPerBlock + this.extraElement + 1
     visibleCount = Math.min(this.data.rows.length - visibleCount, visibleCount)
-    this.currentItems = this.data.rows.slice(this.startingPoint, this.startingPoint + visibleCount)
-    this.scrollTop = this.startingPoint * this.rowHeight
+    this.currentItems = this.data.rows.slice(this.startingPoint, this.startingPoint + visibleCount)    
+    this.scrollTop = this.startingPoint * this.rowHeight   
 
   }
   hightlightRow(rowNumber: number, element: HTMLElement) {
@@ -202,7 +259,8 @@ export class TableComponent extends LitElement {
   highlightCell(rowIndex: number, columnIndex: number) {
     this.selectedRowColumn = false
     this.selectedRow = rowIndex
-    this.selectedColumn = columnIndex
+    this.selectedColumn = columnIndex    
+    this.tableElement.focus()
     setTimeout(() => {
       this.elementInViewport()
     }, 0.1);
@@ -226,7 +284,7 @@ export class TableComponent extends LitElement {
     this.editorMode = false
     this.tableElement.focus()
   }
-  keyOperting(e: any) {
+  keyOperting(e: any) {    
     let code: number = e.keyCode
     if (code >= 37 && code <= 40) {
       if (!this.editorMode) {
@@ -281,7 +339,6 @@ export class TableComponent extends LitElement {
     this.editorRect.width = width
     this.editorRect.top = top
     this.editorRect.height = height
-
   }
   updatePropertyValue(element: HTMLElement, selected: "row" | "column") {
     this.overlapDetails = {}
@@ -289,14 +346,14 @@ export class TableComponent extends LitElement {
     this.overlapDetails["top"] = element?.offsetTop + "px"
     if (selected === "row") {
       this.overlapDetails["width"] = "100%"
-      this.overlapDetails["height"] = element.getBoundingClientRect().height + "px"
+      this.overlapDetails["height"] = element?.getBoundingClientRect().height + "px"
     } else {
-      this.overlapDetails["width"] = element.getBoundingClientRect().width + "px"
+      this.overlapDetails["width"] = element?.getBoundingClientRect().width + "px"
       this.overlapDetails["height"] = "100%"
     }
   }
   scrolling() {
-    let scrollTop = this.renderRoot.querySelector(".table-container")?.scrollTop as number
+    let scrollTop = this.renderRoot.querySelector(".container")?.scrollTop as number
     this.getCurrentItems(scrollTop + 30)
     if (this.selectedRowColumn) {
       if (!this.selectedColumn) {
@@ -304,36 +361,79 @@ export class TableComponent extends LitElement {
       }
     }
   }
-
+  checkingData() {
+    if (this.data) {
+      if (!this.data.columns || !this.data.rows) {
+        this.error = true
+        this.errorMessage = "Data has no specific property."
+      }else{
+        this.firstTime=false            
+      }
+    } else {
+      this.error = true
+      this.errorMessage = "This table has no data."
+    }
+  }
+  // checkingInputElement(){
+  //     if(this.children.length>=this.data.columns.length){
+  //       let elementslotNames:string[]=[]
+  //       Array.from(this.children).forEach((element:Element)=>{
+  //         let slotName=element.slot.toLowerCase()
+  //         if(slotName){           
+  //            elementslotNames.push(slotName)
+  //            this.inputElement[slotName]=element
+  //         }
+  //       })       
+  //       this.data.columns.some(item=>{
+  //         let columnName=item.name.toLowerCase()
+  //         if(!elementslotNames.includes(columnName)){              
+  //           this.error=true
+  //           this.errorMessage=`The element is not given for column ${columnName} `
+  //           return true
+  //         }
+  //       })       
+  //     }
+  //     else{
+  //       this.error=true
+  //       this.errorMessage="The input element is not sufficient"
+  //     }
+  // }  
   render() {
-    
+    if(this.firstTime){      
+      this.checkingData()
+    }    
     return html`
-     <div class="table-container" tabindex=0 @keydown="${this.keyOperting}" @scroll="${this.scrolling}">        
-        <div class="serial-panel panel">
-            <div class="serial-header header common">
-                <div>S.NO</div>
+     <div class="container ${classMap({ table: !this.error })}" tabindex=0 @keydown="${this.keyOperting}" @scroll="${this.scrolling}">     
+         
+       ${this.error ? html`<div class="report"><div class="report-msg">${this.errorMessage}</div></div>` : html`
+       <div class="serial-panel panel">
+          <div class="serial-header header common">
+              <div>S.NO</div>
+          </div>
+          <div class="serial-body body" style=${styleMap({ height: this.data.rows.length * this.rowHeight + "px" })}>
+            <div class=translating-element style=${styleMap({ gridAutoRows: this.rowHeight + "px", transform: "translateY(" + this.scrollTop + "px)" })}>
+                ${this.generateSerials(this.currentItems)}
             </div>
-            <div class="serial-body body" style=${styleMap({ height: this.data.rows.length * this.rowHeight + "px" })}>
-              <div class=translating-element style=${styleMap({ gridAutoRows: this.rowHeight + "px", transform: "translateY(" + this.scrollTop + "px)" })}>
-                  ${this.generateSerials(this.currentItems)}
-              </div>
-            </div>
+          </div>
         </div>
         <div class="content-panel panel">
-          <div class="content-header" style=${styleMap({ gridTemplateColumns: "repeat(" + this.data.columns.length + ",1fr)" })}>
-          ${this.generateColumns(this.data.columns)}
-          </div>
-          <div class="content-body body" style=${styleMap({ height: this.data.rows.length * this.rowHeight + "px" })}>
+            <div class="content-header" style=${styleMap({ gridTemplateColumns: "repeat(" + this.data.columns.length + ",1fr)" })}>
+            ${this.generateColumns(this.data.columns)}
+            </div>
+            <div class="content-body body" style=${styleMap({ height: this.data.rows.length * this.rowHeight + "px" })}>
               <div class=translating-element  style=${styleMap({ gridTemplateColumns: "repeat(" + this.data.columns.length + ",1fr)", gridAutoRows: this.rowHeight + "px", transform: "translateY(" + this.scrollTop + "px)" })}>
-                ${this.generateRowCells(this.currentItems)}
+                ${guard([this.scrollTop,this.selectedRow,this.selectedColumn],()=>this.generateRowCells(this.currentItems))}
                 ${this.selectedRowColumn ? html`<div class="overlap" style=${styleMap({ left: this.overlapDetails.left, top: this.overlapDetails.top, width: this.overlapDetails.width, height: this.overlapDetails.height })}></div>` : nothing}
               </div>
+            </div>
           </div>
-        </div>
-        ${this.editorMode ? html`<div class=editor tabindex=0 @blur=${this.bluringEditor} ?contenteditable=${this.editorMode} selected=${this.data.columns[this.selectedColumn - 1].name + this.selectedRow} style=${styleMap({ left: this.editorRect.left, top: this.editorRect.top, minWidth: this.editorRect.width, minHeight: this.editorRect.height })}>${this.data.rows[this.selectedRow - 1][this.data.columns[this.selectedColumn - 1].name]}</div>` : nothing}
+          ${this.editorMode ? html`<div class=editor tabindex=0 @blur=${this.bluringEditor} ?contenteditable=${this.editorMode} selected=${this.data.columns[this.selectedColumn - 1].name + this.selectedRow} style=${styleMap({ left: this.editorRect.left, top: this.editorRect.top, minWidth: this.editorRect.width, minHeight: this.editorRect.height })}>${this.data.rows[this.selectedRow - 1][this.data.columns[this.selectedColumn - 1].name]}</div>` : nothing}
+       `}
+      
      </div>
     `;
   }
 
 }
 window.customElements.define("table-component", TableComponent)
+
