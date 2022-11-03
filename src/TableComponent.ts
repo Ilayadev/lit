@@ -11,7 +11,7 @@ export class TableComponent extends LitElement {
     super()     
     this.attachShadow({mode:'open',slotAssignment:'manual'})
   }
-  
+  inputElement:{[key in string]:Element}={}
   firstTime:boolean=true
   connectedCallback(): void {
     super.connectedCallback()
@@ -193,22 +193,27 @@ export class TableComponent extends LitElement {
     })}`
   }
   generateRowCells(rows: any[]) {    
+    Array.from(this.children).forEach(x=>{
+      x.remove()
+    })
     let ele:any= html`${map(rows, (rowItem, index) => {
       return html`${map(this.data.columns, (columnItem, columnIndex) => {
-        let selectingCondition: boolean = this.selectedRow === index + this.startingPoint + 1 && this.selectedColumn === columnIndex + 1              
-         let element=this.generateElement(columnItem,rowItem[columnItem.name])   
-        return html`<div class="common cells ${classMap({ highlightCell: selectingCondition })}" ?selected=${selectingCondition} @click="${() => { this.highlightCell(index + this.startingPoint + 1, columnIndex + 1) }}">${element}</div>`
+        let selectingCondition: boolean = this.selectedRow === index + this.startingPoint + 1 && this.selectedColumn === columnIndex + 1
+         let slot=this.assignSlot(columnItem,rowItem[columnItem.name])   
+        return html`<div class="common cells ${classMap({ highlightCell: selectingCondition })}" ?selected=${selectingCondition} @click="${() => { this.highlightCell(index + this.startingPoint + 1, columnIndex + 1) }}">${slot}</div>`
       })}`
     })}`     
     return html`${ele}`
   }
-  // assignSlot(slotName:string){
-  //     let inputElement=this.inputElement[slotName].cloneNode(true) as HTMLSlotElement       
-  //     let slot=document.createElement("slot")
-  //     slot.assign(inputElement)      
-  //     this.appendChild(inputElement)
-  //     return html `${slot}`
-  // }
+  assignSlot(columnItem:any,value:any){
+    let columnName=columnItem.name.toLowerCase()
+      let inputElement=this.inputElement[columnName].cloneNode(true) as HTMLElement   
+      inputElement.innerHTML=value||""
+      let slot=document.createElement("slot")
+      slot.assign(inputElement as Element)      
+      this.appendChild(inputElement)
+      return html `${slot}`
+  }
   generateElement(column:any,value:any){    
       let element=this.createlement(column.tag)
       if(column.cellElement?.class){
@@ -367,37 +372,38 @@ export class TableComponent extends LitElement {
         this.error = true
         this.errorMessage = "Data has no specific property."
       }else{
-        this.firstTime=false            
+        this.firstTime=false          
+        this.checkingInputElement()  
       }
     } else {
       this.error = true
       this.errorMessage = "This table has no data."
     }
   }
-  // checkingInputElement(){
-  //     if(this.children.length>=this.data.columns.length){
-  //       let elementslotNames:string[]=[]
-  //       Array.from(this.children).forEach((element:Element)=>{
-  //         let slotName=element.slot.toLowerCase()
-  //         if(slotName){           
-  //            elementslotNames.push(slotName)
-  //            this.inputElement[slotName]=element
-  //         }
-  //       })       
-  //       this.data.columns.some(item=>{
-  //         let columnName=item.name.toLowerCase()
-  //         if(!elementslotNames.includes(columnName)){              
-  //           this.error=true
-  //           this.errorMessage=`The element is not given for column ${columnName} `
-  //           return true
-  //         }
-  //       })       
-  //     }
-  //     else{
-  //       this.error=true
-  //       this.errorMessage="The input element is not sufficient"
-  //     }
-  // }  
+  checkingInputElement(){
+      if(this.children.length>=this.data.columns.length){
+        let elementslotNames:string[]=[]
+        Array.from(this.children).forEach((element:Element)=>{
+          let slotName=element.slot.toLowerCase()
+          if(slotName){           
+             elementslotNames.push(slotName)
+             this.inputElement[slotName]=element
+          }
+        })       
+        this.data.columns.some(item=>{
+          let columnName=item.name.toLowerCase()
+          if(!elementslotNames.includes(columnName)){              
+            this.error=true
+            this.errorMessage=`The element is not given for column ${columnName} `
+            return true
+          }
+        })       
+      }
+      else{
+        this.error=true
+        this.errorMessage="The input element is not sufficient"
+      }
+  }  
   render() {
     if(this.firstTime){      
       this.checkingData()

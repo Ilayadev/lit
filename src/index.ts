@@ -4,38 +4,22 @@ export let tableData={
         {
             name:"Name",            
             editable:false,
-            visible:true,
-            cellElement:{
-                tag:"div",
-                inputproperty:"innerHTML",
-            }
+            visible:true,           
         },
         {
             name:"Gender",
             editable:false,
-            visible:true,
-            cellElement:{
-                tag:"div",
-                inputproperty:"innerHTML",
-            }
+            visible:true,           
         },
         {
             name:"Id",            
             editable:false,
-            visible:true,
-            cellElement:{
-                tag:"div",
-                inputproperty:"innerHTML",
-            }
+            visible:true,           
         },
         {
             name:"Marks",            
             editable:false,
-            visible:true,
-            cellElement:{
-                tag:"div",
-                inputproperty:"innerHTML",
-            }
+            visible:true,           
         }
     ],
     rows:[
