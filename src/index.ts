@@ -1,44 +1,61 @@
+import { columnConfig } from './TableComponent.js';
+
 export { TableComponent } from './TableComponent.js';
-export let tableData={
-    columns:[
-        {
-            name:"Name",            
-            editable:false,
-            visible:true,
-            cellElement:{
-                tag:"div",
-                inputproperty:"innerHTML",
-            }
-        },
-        {
-            name:"Gender",
-            editable:false,
-            visible:true,
-            cellElement:{
-                tag:"div",
-                inputproperty:"innerHTML",
-            }
-        },
-        {
-            name:"Id",            
-            editable:false,
-            visible:true,
-            cellElement:{
-                tag:"div",
-                inputproperty:"innerHTML",
-            }
-        },
-        {
-            name:"Marks",            
-            editable:false,
-            visible:true,
-            cellElement:{
-                tag:"div",
-                inputproperty:"innerHTML",
+let columns=[
+    {
+        name:"Name",        
+        prop:"Name",    
+        editable:true,
+        visible:true,
+        cellTemplate:{
+            tag:"div",
+            inputProp:"innerHTML",
+            class:{
+                test1:true,
+                test2:false
             }
         }
-    ],
-    rows:[
+    },
+    {
+        name:"Gender",
+        prop:"Gender",
+        editable:false,
+        visible:true,       
+        cellTemplate:{
+            tag:"span",
+            inputProp:"innerText",            
+        }
+    },
+    {
+        name:"Id",        
+        prop:"Id",    
+        editable:false,
+        visible:true,
+        cellTemplate:{
+            tag:"span",
+            inputProp:"innerText",            
+        }        
+    },          
+    {
+        name:"Marks",   
+        prop:"Marks",         
+        editable:true,
+        visible:false,       
+    },
+    {
+        name:"Attendance",
+        prop:"Attendance",
+        editable:true,
+        visible:true,
+        cellTemplate:{
+            tag:"divs",
+            inputProp:"value",            
+        }
+    }
+]
+
+    
+    let source=[
         {
             "Id": 5005,
             "Name": "ilaya",
@@ -48877,6 +48894,19 @@ export let tableData={
             "Attendance": false
         }
     ]
-}
-//@ts-ignore
-document.querySelector('table-component').data=tableData
+
+// interface sample {
+//     columns?: columnConfig[],
+//     source?: {
+//         Id: number;
+//         Name: string;
+//         Age: number;
+//         Gender: string;
+//         Attendance: boolean;
+//     }[];
+//     rowHeader?: boolean;
+// }
+let TableComponent:any=document.querySelector('table-component') 
+TableComponent.columns=columns
+TableComponent.source=source
+TableComponent.serialNumber=true

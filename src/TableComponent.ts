@@ -1,34 +1,64 @@
-import { html, css, LitElement, PropertyValueMap, PropertyDeclarations, nothing } from 'lit';
+import { html, css, LitElement, PropertyValueMap, PropertyDeclarations, nothing} from 'lit';
 import { property, query, state } from 'lit/decorators.js';
 import { map } from 'lit/directives/map.js';
 import { styleMap } from 'lit/directives/style-map.js';
 import { classMap } from 'lit/directives/class-map.js';
 import {guard} from 'lit/directives/guard.js';
 import {ref} from 'lit/directives/ref.js';
-
+import {cache} from 'lit/directives/cache.js';
+import { literal,unsafeStatic} from 'lit/static-html.js';
+import {unsafeHTML} from 'lit-html/directives/unsafe-html.js';
+export type columnConfig={
+  name:string,
+  prop:string,
+  type?:"string"|"number"|"boolean",
+  visible?:boolean,
+  editable?:boolean,
+  sortable?:boolean,
+  sortOrder?:"asc"|"desc",
+  cellTemplate?:cellTemplate   
+}
+type cellTemplate={
+  tag:string,
+  class?:{
+    [key in string]:boolean
+  },
+  inputProp:string
+}
 export class TableComponent extends LitElement {
   constructor() {
     super()     
     this.attachShadow({mode:'open',slotAssignment:'manual'})
   }
-  
+  private _tag!:string
+  get tag(){
+    return this._tag
+  }
+  set tag(value){
+    this._tag=value
+    console.log(value)
+  }
   firstTime:boolean=true
+  availableColumn!:columnConfig[]
   connectedCallback(): void {
     super.connectedCallback()
   }
-  @property({ type: Object })
-  data!: { columns: { name: string, editable: boolean }[], rows: any[] }
-
+  @property({ type: Object})
+  source!:{[key in string]:any}[]
+  columns!: columnConfig[]
+  @property()
+  serialNumber:boolean=false
   @state()
   extraElement!: number
   // inputElement:{[key in  string]:Element}={}
   startingPoint!: number
-  rowPerBlock!: number
-  triggerGenrateElements: boolean = false
+  visibleCount!:number
+  rowPerBlock!: number  
   @property({ type: Number })
   rowHeight!: number
   @state()
   scrollTop!: number
+  @state()
   currentItems!: any[]
   @state()
   selectedRow: number = 1;
@@ -79,12 +109,13 @@ export class TableComponent extends LitElement {
       height:100%;      
       box-sizing:border-box;      
       overflow-y:auto;
-      outline:none;      
+      outline:none;   
+      border-top:1px solid #dedede;
+      border-left:1px solid #dedede   
      }
     
     .table{
-      display:grid;
-      grid-template-columns:auto 1fr;
+      display:grid;      
       grid-template-rows:100%;
     }   
     .report{
@@ -99,7 +130,7 @@ export class TableComponent extends LitElement {
       font-size: 14px;
     } 
     .serial-panel{
-      border-left:1px solid #dedede;
+      /* border-left:1px solid #dedede; */
       position:sticky;
       left:0;
       z-index:20;      
@@ -136,7 +167,7 @@ export class TableComponent extends LitElement {
     }
     .header{
       background-color:#ededed;
-      border-top:1px solid #dedede;
+      /* border-top:1px solid #dedede; */
       font-weight:bold;
     }    
     .translating-element{
@@ -145,6 +176,9 @@ export class TableComponent extends LitElement {
     }   
     .cells{
       min-width:50px;
+      overflow:hidden;
+      white-space:nowrap;
+      text-overflow:ellipsis;
     }
     .hightlightRowColumn{ 
       background-color:rgb(19, 173, 107);
@@ -181,8 +215,8 @@ export class TableComponent extends LitElement {
     
   `;
   generateColumns(columnArray: any[]) {
-    return html`${map(columnArray, (item, index) => {
-      return html`<div class="header common cells ${classMap({ hightlightRowColumn: this.selectedColumn == index + 1 && this.selectedRow == 0 })}" @click="${(event: any) => { this.highlightColumn(index + 1, event.target) }}">${item.name}</div>`
+    return html`${map(columnArray, (columnItem:columnConfig, index:number) => {
+      return html`<div class="header common cells ${classMap({ hightlightRowColumn: this.selectedColumn == index + 1 && this.selectedRow == 0 })}" @click="${(event: any) => { this.highlightColumn(index + 1, event.target) }}">${columnItem.name?columnItem.name:undefined}</div>`
     })}`
   }
   generateSerials(serials: any[]) {
@@ -192,31 +226,29 @@ export class TableComponent extends LitElement {
       return html`<div class=" common  ${classMap({ hightlightRowColumn: condition })}" ?selected=${condition} @click="${(event: any) => { this.hightlightRow(index, event.target) }}">${index}</div>`
     })}`
   }
-  generateRowCells(rows: any[]) {    
+  generateRowCells(rows: any[]) {   
     let ele:any= html`${map(rows, (rowItem, index) => {
-      return html`${map(this.data.columns, (columnItem, columnIndex) => {
+      return html`${map(this.availableColumn, (columnItem:columnConfig, columnIndex) => {
         let selectingCondition: boolean = this.selectedRow === index + this.startingPoint + 1 && this.selectedColumn === columnIndex + 1              
-         let element=this.generateElement(columnItem,rowItem[columnItem.name])   
-        return html`<div class="common cells ${classMap({ highlightCell: selectingCondition })}" ?selected=${selectingCondition} @click="${() => { this.highlightCell(index + this.startingPoint + 1, columnIndex + 1) }}">${element}</div>`
+        let input=this.generateInput(columnItem,rowItem[columnItem.prop])       
+        return html`<div class="common cells ${classMap({ highlightCell: selectingCondition })}" ?selected=${selectingCondition} @click="${() => { this.highlightCell(index + this.startingPoint + 1, columnIndex + 1) }}">${input}</div>`
+        
       })}`
     })}`     
     return html`${ele}`
   }
-  // assignSlot(slotName:string){
-  //     let inputElement=this.inputElement[slotName].cloneNode(true) as HTMLSlotElement       
-  //     let slot=document.createElement("slot")
-  //     slot.assign(inputElement)      
-  //     this.appendChild(inputElement)
-  //     return html `${slot}`
-  // }
-  generateElement(column:any,value:any){    
-      let element=this.createlement(column.tag)
-      if(column.cellElement?.class){
-        this.assignClass(element,column.element.class)
+  generateInput(column:columnConfig,value:any){       
+      if(!column.cellTemplate){
+        return value
+      }else{
+        return html `${this.generateElement(column.cellTemplate,value)}`
       }
-      let inputproperty=column.cellElement.inputproperty
-      //@ts-ignore
-      element[inputproperty]=value||""
+  }
+  generateElement(template:cellTemplate,value:any){    
+      let element=html`${unsafeHTML(`<${template.tag}>${value}</${template.tag}>`)}`
+      if(template.class){
+        // this.assignClass(element,template.class)
+      }       
       return element
   }
   createlement(tag:string){
@@ -224,7 +256,7 @@ export class TableComponent extends LitElement {
   }
   assignClass(element:HTMLElement,classes:{[key in string]:boolean}){
       for(let key in classes){
-        if(classes[key]){
+        if(classes[key]===true){          
           element.classList.add(key)
         }
       }
@@ -237,9 +269,9 @@ export class TableComponent extends LitElement {
   getCurrentItems(scrolltop: number) {
     this.startingPoint = Math.floor((scrolltop / this.rowHeight) - this.extraElement)
     this.startingPoint = Math.max(0, this.startingPoint)
-    let visibleCount = this.rowPerBlock + this.extraElement + 1
-    visibleCount = Math.min(this.data.rows.length - visibleCount, visibleCount)
-    this.currentItems = this.data.rows.slice(this.startingPoint, this.startingPoint + visibleCount)    
+    this.visibleCount = this.rowPerBlock + this.extraElement + 1
+    this.visibleCount = Math.min(this.source.length - this.visibleCount, this.visibleCount)
+    this.currentItems = this.source.slice(this.startingPoint, this.startingPoint + this.visibleCount)    
     this.scrollTop = this.startingPoint * this.rowHeight   
 
   }
@@ -260,7 +292,6 @@ export class TableComponent extends LitElement {
     this.selectedRowColumn = false
     this.selectedRow = rowIndex
     this.selectedColumn = columnIndex    
-    this.tableElement.focus()
     setTimeout(() => {
       this.elementInViewport()
     }, 0.1);
@@ -268,9 +299,9 @@ export class TableComponent extends LitElement {
   elementInViewport() {
     let top = this.selectedElement?.getBoundingClientRect().top
     let bottom = this.selectedElement?.getBoundingClientRect().bottom
-    let containerTop = this.parentDeatils.top + 30
+    let containerTop = this.parentDeatils.top + 31
     let containerBottom = this.parentDeatils.bottom
-    if (top < containerTop) {
+    if (top < containerTop) {      
       let scrolltop = containerTop - top
       this.tableElement.scrollBy(0, -scrolltop)
     }
@@ -280,21 +311,22 @@ export class TableComponent extends LitElement {
     }
 
   }
-  bluringEditor = () => {
-    this.editorMode = false
+  bluringEditor = () => {    
+    this.updateEditedValue()
+    this.editorMode=false
     this.tableElement.focus()
   }
   keyOperting(e: any) {    
     let code: number = e.keyCode
     if (code >= 37 && code <= 40) {
-      if (!this.editorMode) {
+      if (!this.editorMode&&!this.selectedRowColumn) {
         e.preventDefault()
         if (code === 37) {
           if (this.selectedColumn !== 1) {
             this.selectedColumn--
           }
         } else if (code === 39) {
-          if (this.selectedColumn !== this.data.columns.length) {
+          if (this.selectedColumn !== this.availableColumn.length) {
             this.selectedColumn++
           }
         } else if (code === 38) {
@@ -305,7 +337,7 @@ export class TableComponent extends LitElement {
             }, 0.1);
           }
         } else {
-          if (this.selectedRow !== this.data.rows.length) {
+          if (this.selectedRow !== this.source.length) {
             this.selectedRow++
             setTimeout(() => {
               this.elementInViewport()
@@ -315,19 +347,35 @@ export class TableComponent extends LitElement {
       }
     } else if (code === 13) {
       e.preventDefault()
-      if (this.editorMode) {
-        this.editorMode = false
-        this.bluringEditor()
+      if (this.editorMode) {  
+        this.editorMode=false      
+        // this.bluringEditor()
+        // console.log("on key")
       } else {
         if (this.selectedElement) {
-          this.editorMode = true
-          this.getEditorClientRect(this.selectedElement)
-          setTimeout(() => {
-            this.editor.focus({ preventScroll: true })
-          }, 1);
+          this.checkingEditorState()
         }
       }
     }
+  }
+  checkingEditorState(){
+    if(this.availableColumn[this.selectedColumn-1].editable===true){
+      this.openEditor()
+    }else{
+      alert("This column unable to edit")
+    }
+  }
+  openEditor(){
+    this.editorMode = true
+    this.getEditorClientRect(this.selectedElement)
+    setTimeout(() => {
+      this.editor.focus({ preventScroll: true })
+    }, 1);
+  }
+  updateEditedValue(){
+    let value=this.editor.innerText
+    this.source[this.selectedRow-1][this.availableColumn[this.selectedColumn-1].name]=value         
+    this.source=[...this.source]
   }
   getEditorClientRect(element: HTMLElement) {
     this.editorRect = {}
@@ -362,72 +410,64 @@ export class TableComponent extends LitElement {
     }
   }
   checkingData() {
-    if (this.data) {
-      if (!this.data.columns || !this.data.rows) {
-        this.error = true
-        this.errorMessage = "Data has no specific property."
+    if (this.columns||this.source) {
+      if(!this.columns){
+        this.error=true
+        this.errorMessage="This table has no columns"
+      }
+      else if (!this.source){
+        this.error=true,
+        this.errorMessage="This table has no source"
       }else{
-        this.firstTime=false            
+        this.filterColumn(this.columns)
       }
     } else {
       this.error = true
       this.errorMessage = "This table has no data."
     }
   }
-  // checkingInputElement(){
-  //     if(this.children.length>=this.data.columns.length){
-  //       let elementslotNames:string[]=[]
-  //       Array.from(this.children).forEach((element:Element)=>{
-  //         let slotName=element.slot.toLowerCase()
-  //         if(slotName){           
-  //            elementslotNames.push(slotName)
-  //            this.inputElement[slotName]=element
-  //         }
-  //       })       
-  //       this.data.columns.some(item=>{
-  //         let columnName=item.name.toLowerCase()
-  //         if(!elementslotNames.includes(columnName)){              
-  //           this.error=true
-  //           this.errorMessage=`The element is not given for column ${columnName} `
-  //           return true
-  //         }
-  //       })       
-  //     }
-  //     else{
-  //       this.error=true
-  //       this.errorMessage="The input element is not sufficient"
-  //     }
-  // }  
+  filterColumn(Array:columnConfig[]){
+    this.availableColumn=[]
+    Array.forEach(column=>{
+      if(column.visible!==undefined){
+        if(column.visible==true){
+          this.availableColumn.push(column)
+        }
+      }else{
+        this.availableColumn.push(column)
+      }
+    })
+  }  
   render() {
     if(this.firstTime){      
       this.checkingData()
     }    
     return html`
-     <div class="container ${classMap({ table: !this.error })}" tabindex=0 @keydown="${this.keyOperting}" @scroll="${this.scrolling}">     
+     <div class="container ${classMap({ table: !this.error })}" style=${styleMap({gridTemplateColumns:this.serialNumber?"auto 1fr":"1fr"})} tabindex=0 @keydown="${this.keyOperting}" @scroll="${this.scrolling}">     
          
        ${this.error ? html`<div class="report"><div class="report-msg">${this.errorMessage}</div></div>` : html`
-       <div class="serial-panel panel">
+         ${this.serialNumber?html`<div class="serial-panel panel">
           <div class="serial-header header common">
               <div>S.NO</div>
           </div>
-          <div class="serial-body body" style=${styleMap({ height: this.data.rows.length * this.rowHeight + "px" })}>
+          <div class="serial-body body" style=${styleMap({ height: this.source.length * this.rowHeight + "px" })}>
             <div class=translating-element style=${styleMap({ gridAutoRows: this.rowHeight + "px", transform: "translateY(" + this.scrollTop + "px)" })}>
                 ${this.generateSerials(this.currentItems)}
             </div>
           </div>
-        </div>
+        </div>`:nothing}
         <div class="content-panel panel">
-            <div class="content-header" style=${styleMap({ gridTemplateColumns: "repeat(" + this.data.columns.length + ",1fr)" })}>
-            ${this.generateColumns(this.data.columns)}
+            <div class="content-header" style=${styleMap({ gridTemplateColumns: "repeat(" + this.availableColumn.length + ",1fr)" })}>
+            ${this.generateColumns(this.availableColumn)}
             </div>
-            <div class="content-body body" style=${styleMap({ height: this.data.rows.length * this.rowHeight + "px" })}>
-              <div class=translating-element  style=${styleMap({ gridTemplateColumns: "repeat(" + this.data.columns.length + ",1fr)", gridAutoRows: this.rowHeight + "px", transform: "translateY(" + this.scrollTop + "px)" })}>
-                ${guard([this.scrollTop,this.selectedRow,this.selectedColumn],()=>this.generateRowCells(this.currentItems))}
+            <div class="content-body body" style=${styleMap({ height: this.source.length * this.rowHeight + "px" })}>
+              <div class=translating-element  style=${styleMap({ gridTemplateColumns: "repeat(" + this.availableColumn.length + ",1fr)", gridAutoRows: this.rowHeight + "px", transform: "translateY(" + this.scrollTop + "px)" })}>
+                ${guard([this.scrollTop,this.selectedRow,this.selectedColumn,this.source],()=>html `${this.generateRowCells(this.currentItems)}`)}
                 ${this.selectedRowColumn ? html`<div class="overlap" style=${styleMap({ left: this.overlapDetails.left, top: this.overlapDetails.top, width: this.overlapDetails.width, height: this.overlapDetails.height })}></div>` : nothing}
               </div>
             </div>
-          </div>
-          ${this.editorMode ? html`<div class=editor tabindex=0 @blur=${this.bluringEditor} ?contenteditable=${this.editorMode} selected=${this.data.columns[this.selectedColumn - 1].name + this.selectedRow} style=${styleMap({ left: this.editorRect.left, top: this.editorRect.top, minWidth: this.editorRect.width, minHeight: this.editorRect.height })}>${this.data.rows[this.selectedRow - 1][this.data.columns[this.selectedColumn - 1].name]}</div>` : nothing}
+          </div>                
+          ${this.editorMode?html`<div class=editor tabindex=0 @blur=${this.bluringEditor} ?contenteditable=${this.editorMode} selected=${this.availableColumn[this.selectedColumn - 1].name + this.selectedRow} style=${styleMap({ left: this.editorRect.left, top: this.editorRect.top, minWidth: this.editorRect.width, minHeight: this.editorRect.height })}>${this.source[this.selectedRow - 1][this.availableColumn[this.selectedColumn - 1].name]}</div>` : nothing}
        `}
       
      </div>
